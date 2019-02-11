@@ -48,17 +48,17 @@
 			(if (not (equalp 0 (second (first y4))))
 				(print "FAIL: y4 ReLU calculation failed"))
 			(if (not (equalp 2.888 (third (first y4))))
-				(print "FAIL: y4 ReLU calculation failed"))))
-)
+				(print "FAIL: y4 ReLU calculation failed")))))
 
 (defun test-model ()
-	(let ((*parameters* (model (make-matrix 3 1) '(1 1 0) nil 1)))
-
-		(loop for key being the hash-keys of *parameters*
-           using (hash-value value)
-           do (format t "The value associated with the key ~S is ~S~%" key value))
-	)
-)
+	(let ((Y (make-matrix 3 1)))
+		(setf (aref Y 0 0) 1)
+		(setf (aref Y 1 0) 1)
+		(setf (aref Y 2 0) 0)
+		(let ((*parameters* (model (make-matrix 3 3) Y nil 1)))
+			(loop for key being the hash-keys of *parameters*
+			   using (hash-value value)
+			   do (format t "The value associated with the key ~S is ~S~%" key value)))))
 
 (print '(Test sigmoid))
 ;(time (test-sigmoid))

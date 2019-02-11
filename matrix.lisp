@@ -45,12 +45,26 @@
 			do (setf sum (+ sum (* (aref a rownum x) (nth x b)))))
 	
 	sum))
-  
+	
+(defun add-row (row)
+	(let ((sum 0.0))
+		(loop for x from 0 to (- (columncount row) 1)
+			do (setf sum (+ sum (aref row 0 x) )))
+	
+	sum))
+	
+(defun add-column (column)
+	(let ((sum 0.0))
+		(loop for x from 0 to (- (rowcount column) 1)
+			do (setf sum (+ sum (aref column x 0) )))
+	
+	sum))
+	
 (defun matmul (a b)
   "Matrix multiplication"
-  (print 'matmul)
-  (print a)
-  (print b)
+  ;(print 'matmul)
+  ;(print a)
+  ;(print b)
   (assert (eql (columncount a) (rowcount b))
             (a b) 
             "Cannot multiply matrices, dimensions don't match")
@@ -78,9 +92,18 @@
 					setf (aref tmp y x) (aref matrix x y))))
 		tmp))
 
-(defun matadd (matrix b)
-	"Add scalar to matrix"
-	(print 'matadd)
+(defun mat-add (matrix b)
+	(matrix-apply matrix b #'+))
+	
+(defun mat-minus (matrix b)
+	(matrix-apply matrix b #'-))
+	
+(defun mat-multiply (matrix b)
+	(matrix-apply matrix b #'*))
+	
+(defun matrix-apply (matrix b function)
+	"Add scalar or list of scalars to matrix"
+	;(print 'matadd)
 	(assert (or (not (listp b)) (eql (length b) (rowcount matrix)))
             (matrix b) 
             "Cannot matadd, dimensions don't match")
@@ -94,18 +117,42 @@
 			(let ((tmp (make-matrix (rowcount matrix) (columncount matrix) 0.0)))
 				(loop for x from 0 to (- (rowcount matrix) 1)
 					do (loop for y from 0 to (- (columncount matrix) 1)
-						do (setf (aref tmp x y) (+ (aref matrix x y) (nth x b)))))
+						do (setf (aref tmp x y) (funcall function (aref matrix x y) (nth x b)))))
 			tmp))
 		((is-matrix b) 	
 			(let ((tmp (make-matrix (rowcount matrix) (columncount matrix) 0.0)))
 				(loop for x from 0 to (- (rowcount matrix) 1)
 					do (loop for y from 0 to (- (columncount matrix) 1)
 						
-						do (setf (aref tmp x y) (+ (aref matrix x y) (aref b x 0)))))
+						do (setf (aref tmp x y) (funcall function (aref matrix x y) (aref b x 0)))))
 			tmp))
 		(t 		
 			(let ((tmp (make-matrix (rowcount matrix) (columncount matrix) 0.0)))
 				(loop for x from 0 to (- (rowcount matrix) 1)
 					do (loop for y from 0 to (- (columncount matrix) 1)
-						do (setf (aref tmp x y) (+ (aref matrix x y) b))))
+						do (setf (aref tmp x y) (funcall function (aref matrix x y) b))))
 			tmp))))
+			
+(defun matrix-map (function matrix
+                  &optional (retval (make-array (array-dimensions matrix))))
+	"Apply FUNCTION to each element of ARRAY.
+	Return a new array, or write into the optional 3rd argument."
+	(dotimes (i (array-total-size matrix) retval)
+		(setf (row-major-aref retval i)
+			  (funcall function (row-major-aref matrix i)))))
+			  
+(defun element-wise-multiply (A B) (element-wise-matrix #'* A B))
+
+; https://rosettacode.org/wiki/Element-wise_operations#Common_Lisp
+(defun element-wise-matrix (fn A B)
+  (let* ((len (array-total-size A))
+         (m   (car (array-dimensions A)))
+         (n   (cadr (array-dimensions A)))
+         (C   (make-array `(,m ,n) :initial-element 0.0d0)))
+ 
+    (loop for i from 0 to (1- len) do
+         (setf (row-major-aref C i) 
+               (funcall fn
+                        (row-major-aref A i)
+                        (row-major-aref B i))))
+    C))
