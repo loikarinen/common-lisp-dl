@@ -46,10 +46,32 @@
 	
 	sum))
 	
-(defun add-row (row)
+(defun sum-axis (matrix axis)
+  "Sums matrix rows (axis 1) or columns (axis 0), keeping either row or column count intact"
+  (cond ((= axis 1) 
+		(let  ((rows (rowcount matrix))
+		 (tmp (make-matrix (rowcount matrix) 1 0.0)))
+			(loop for x from 0 to (- rows 1)
+				do (setf (aref tmp x 0) (sum-row matrix x)))
+	tmp))
+		((= axis 0) 
+		(let  ((columns (columncount matrix))
+		 (tmp (make-matrix 1 (columncount matrix) 0.0)))
+			(loop for x from 0 to (- columns 1)
+				do (setf (aref tmp x 0) (sum-column matrix x)))
+	tmp))))
+	
+(defun sum-row (matrix rownum)
 	(let ((sum 0.0))
-		(loop for x from 0 to (- (columncount row) 1)
-			do (setf sum (+ sum (aref row 0 x) )))
+		(loop for x from 0 to (- (columncount matrix) 1)
+			do (setf sum (+ sum (aref matrix rownum x) )))
+	
+	sum))
+	
+(defun sum-column (matrix colnum)
+	(let ((sum 0.0))
+		(loop for x from 0 to (- (rowcount matrix) 1)
+			do (setf sum (+ sum (aref matrix x colnum) )))
 	
 	sum))
 	
@@ -63,8 +85,10 @@
 (defun matmul (a b)
   "Matrix multiplication"
   ;(print 'matmul)
-  ;(print a)
-  ;(print b)
+  ; (format t "~%A rowcount ~S~%" (rowcount a))
+  ; (format t "~%A columncount ~S~%" (columncount a))
+  ; (format t "~%W rowcount ~S~%" (rowcount b))
+  ; (format t "~%W columncount ~S~%" (columncount b))
   (assert (eql (columncount a) (rowcount b))
             (a b) 
             "Cannot multiply matrices, dimensions don't match")
@@ -101,12 +125,17 @@
 (defun mat-multiply (matrix b)
 	(matrix-apply matrix b #'*))
 	
+(defun mat-divide (matrix b)
+	(matrix-apply matrix b #'/))
+	
 (defun matrix-apply (matrix b function)
-	"Add scalar or list of scalars to matrix"
-	;(print 'matadd)
-	(assert (or (not (listp b)) (eql (length b) (rowcount matrix)))
-            (matrix b) 
-            "Cannot matadd, dimensions don't match")
+	"Apply function for scalar or list of scalars to matrix"
+  ; (format t "~%matrix-apply A rowcount ~S~%" (rowcount matrix))
+  ; (format t "~%A columncount ~S~%" (columncount matrix))
+  ; (format t "~%b ~S~%" b)
+	; (assert (or (not (listp b)) (eql (length b) (rowcount matrix)))
+            ; (matrix b) 
+            ; "Cannot mat-apply, dimensions don't match")
 	
 	(cond 
 		((and (listp b) (not (eql (length b) (rowcount matrix))))
@@ -141,7 +170,14 @@
 		(setf (row-major-aref retval i)
 			  (funcall function (row-major-aref matrix i)))))
 			  
+(defun element-wise-add (A B) (element-wise-matrix #'+ A B))
+
+(defun element-wise-minus (A B) (element-wise-matrix #'- A B))
+
 (defun element-wise-multiply (A B) (element-wise-matrix #'* A B))
+
+(defun element-wise-divide (A B) (element-wise-matrix #'/ A B))
+
 
 ; https://rosettacode.org/wiki/Element-wise_operations#Common_Lisp
 (defun element-wise-matrix (fn A B)

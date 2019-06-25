@@ -12,7 +12,13 @@
 						do (setf (aref tmp x y) (sigmoid (aref z x y)))))
 			(list tmp z)))
 		((listp z) 	(list (mapcar #'sigmoid z) z))
-		(t 			(/ 1 (+ 1 (expt e (* -1 z)))))))
+		(t 			(min 0.999999915765362456 (/ 1 (+ 1 (expt e (* -1 z))))))))
+  
+(defun sigmoid-backward (dA layer-cache)
+	"Computes the derivative of the sigmoid from cached values"
+	; Sigmoid derivative = s(x)(1 − s(x))
+	(let ((s (get-activation-cache layer-cache)))
+		(element-wise-multiply dA (element-wise-multiply s (matrix-map (lambda (x) (- 1 x)) s)))))
   
 (defun relu (x)
 	"Computes the activation for matrix, scalar, or list x with a rectified linear unit"
@@ -26,9 +32,15 @@
 		((listp x) 	(list(mapcar #'relu x) x))
 		(t 			(max 0 x))))
 
+(defun relu-backward (dA layer-cache)
+	"Computes the derivative of the relu from cached values"
+	; ReLU derivative = 0 if x < 0 else 1
+	(let ((r (get-activation-cache layer-cache)))
+	(element-wise-multiply dA (matrix-map (lambda (x) (cond ((< x 0) 0) (t 1))) r))))
+
 (defun initialize-parameters (dimensions parameters index)
 	(unless (or (equal 1 (length dimensions)) (null dimensions))
-		(setf (gethash (list 'w index) parameters) (make-matrix (second dimensions) (first dimensions))) ; weights
+		(setf (gethash (list 'w index) parameters) (mat-multiply (make-matrix (second dimensions) (first dimensions)) 0.01)) ; weights
 		(setf (gethash (list 'b index) parameters) (make-matrix (second dimensions) 1 0.0)) ; biases
 		
 		(initialize-parameters (rest dimensions) parameters (+ index 1))))
@@ -36,7 +48,9 @@
 ;
 ; FORWARD PROPAGATION
 ;
-
+; Cache list format repeated L times: 
+; (( A W b) activation)
+;
 (defun forward-propagation (X parameters index caches accumulator)
 	(let (
 		(A X)
@@ -45,17 +59,16 @@
 		(a-vals nil)
 		(W (gethash (list 'w index) parameters))
 		(b (gethash (list 'b index) parameters)))
-			(print (list 'forward-propagation index))
+			;(print (list 'forward-propagation index))
 			;(format t "~%caches: ~S~%" caches)
-			(format t "~%layer function: ~S~%" g)
-			;(format t "~%L: ~S~%" L)
+			;(format t "~%layer function: ~S~%" g)
 			;(format t "~%b: ~S~%" b)
 			(setq a-vals (linear-activation-forward A W b parameters g))
-			(setq caches (append caches (get-cache a-vals)))
+			(setq caches (append caches (second a-vals)))
 			
 			(cond ((equal index (- L 1)) 
-						(format t "~%*******************************************~%" b)
-						(format t "~%a-vals activation: ~S~%" (get-activation a-vals))
+						;(format t "~%*******************************************~%" b)
+						;(format t "~%a-vals activation: ~S~%" (get-activation a-vals))
 						(setq accumulator (list (get-activation a-vals) caches)))
 				   (t (forward-propagation (get-activation a-vals) parameters (+ index 1) caches accumulator)))))
 
@@ -63,27 +76,30 @@
 	(let ((forward-vals nil)
 		  (a-vals nil))
 		(setq forward-vals (linear-forward A_prev W b))
+		;(format t "~%forward-vals ~S~%" forward-vals)
 		
 		; TODO is-sigmoid --> (setq a-vals (GET_ACTIVATION_F_HERE (get-Z forward-vals)))
 		(cond 	((is-sigmoid activation-function) (setq a-vals (sigmoid (get-Z forward-vals))))
 				((is-relu activation-function) (setq a-vals (relu (get-Z forward-vals))))
 				(t (print '(activation function not supported))))
+		;(format t "~%a-vals ~S~%" a-vals)
 		
 		;(format t "~%activation is: ~S~%" (get-activation a-vals))
-		;(format t "~%cache is ~S~%" (get-cache a-vals))
+		;(format t "~%forward cache is ~S~%" (get-linear-cache forward-vals))
+		;(format t "~%activation cache is ~S~%" (get-activation-cache a-vals))
 		
 		; return the output of the activation function 
-		; together with caches for backward propagation
-	(list (get-activation a-vals) (list (get-linear-cache forward-vals) (get-cache a-vals)))))
+		                        ; together with cache for backward propagation
+	(list (get-activation a-vals) (list(list (get-linear-cache forward-vals) (get-activation-cache a-vals))))))
 
 (defun linear-forward (A_prev W b)
 	(let ((Z nil))
 		;(format t "~%A_prev ~S~%" A_prev)
 		;(format t "~%W ~S~%" W)
 		;(format t "~%b ~S~%" b)
-		(setq Z (mat-add (matmul W A_prev) b))
+		(setq Z (mat-add (transpose (matmul (transpose A_prev) (transpose W))) b))
 		;(format t "~%Z ~S~%" Z)
-	(list Z '(1 2 3))))
+	(list Z (list A_prev W b))))
 
 ;
 ; COST
@@ -91,16 +107,122 @@
 	
 (defun compute-cost (A_L Y)
 	(let ((f (model-cost-function)))
-		(format t "~%cost-function ~S~%" f)
+		;(format t "~%cost-function ~S~%" f)
 		(cond 	((is-cross-entropy f) (cross-entropy A_L Y))
 				(t (print '(cost function not supported))))))
 
 (defun cross-entropy (A_L Y)
-	(let ((m (array-dimension Y 0))) ; number of labels
-		(* (/ -1 m) (add-column (mat-add 
-			(element-wise-multiply Y (matrix-map (lambda (x) (log x)) A_L))
-			(element-wise-multiply (matrix-map (lambda (x) (- 1 x)) Y) (matrix-map (lambda (x) (log (- 1 x))) A_L)))))))
+	(let (
+		(m (array-dimension Y 0))); number of labels
+			;(format t "~%m is ~S~%" m)
+			;(format t "~%1-A_L is ~S~%" (matrix-map (lambda (x) (log (- 1 x))) A_L))
+			(* (/ -1 m) (add-column (mat-add 
+				(element-wise-multiply Y (matrix-map (lambda (x) (log x)) A_L))
+				(element-wise-multiply (matrix-map (lambda (x) (- 1 x)) Y) (matrix-map (lambda (x) (log (- 1 x))) A_L)))))))
 			
+;
+; BACKWARD PROPAGATION
+;
+
+(defun backward-propagation (A_L Y caches)
+	(let (
+		(L (length caches))
+		(Y_T (transpose Y))
+		(index (length caches))
+		(gradients nil))
+		; (format t "~%Y_T is ~S~%" Y_T)
+		 ;(format t "~%A_L is ~S~%" A_L)
+		 ;(format t "~%1-A is ~S~%" (matrix-map (lambda (x) (- 1 x)) A_L))
+		 ;(format t "~%1-Y is ~S~%" (matrix-map (lambda (x) (- 1 x)) Y_T))
+		 ;(format t "~%divided is ~S~%" (element-wise-divide (matrix-map (lambda (x) (- 1 x)) Y_T) (matrix-map (lambda (x) (- 1 x)) A_L)))
+		; (format t "~%minused y/a is ~S~%" (element-wise-minus (element-wise-divide Y_T A_L) (element-wise-divide (matrix-map (lambda (x) (- 1 x)) Y_T) (matrix-map (lambda (x) (- 1 x)) A_L))))
+		;(format t "~%multiplied is ~S~%" (mat-multiply (element-wise-minus (element-wise-divide Y_T A_L) (element-wise-divide (matrix-map (lambda (x) (- 1 x)) Y_T) (matrix-map (lambda (x) (- 1 x)) A_L))) -1))
+		
+			(activation-backward 
+				; dA_L
+				(mat-multiply (element-wise-minus (element-wise-divide Y_T A_L) (element-wise-divide (matrix-map (lambda (x) (- 1 x)) Y_T) (matrix-map (lambda (x) (- 1 x)) A_L))) -1) 
+				caches 
+				index 
+				nil)))
+
+;
+; Gradients list format repeated L times: 
+; (dA dW db) 
+;
+; index matches layer number (ie. L is last layer) for ease of reading
+
+(defun activation-backward (dA caches index accumulator)
+		(let (
+			(cache nil)
+			(linear_cache nil)
+			(m nil)
+			(dZ nil)
+			(dW nil)
+			(db nil)
+			(dA_prev nil)
+			(layer_gradients))
+		;(print 'activation-backward)
+		;(format t "~%dA is ~S~%" dA)
+		(setq cache 		(nth (- index 1) caches))
+		(setq linear_cache 	(first cache))
+		(setq m 			(columncount (first linear_cache)))
+		(setq dZ 
+			(cond ((is-sigmoid 	(layer-function index)) (sigmoid-backward dA cache))
+				  ((is-relu 	(layer-function index)) (relu-backward dA cache))
+				  (t 			(print '(activation derivative function not supported)))))
+		; (format t "~%dZ rows ~S~%" (rowcount dZ))
+		; (format t "~%dZ columns ~S~%" (columncount dZ))
+		; (format t "~%A_prev rows ~S~%" (rowcount (first linear_cache)))
+		; (format t "~%A_prev columns ~S~%" (columncount (first linear_cache)))
+		(setq dW 		(mat-multiply (matmul dZ (transpose (first linear_cache))) (/ 1 m)))
+		(setq db  		(sum-axis dZ 1))
+		;(format t "~%matmul ~S~%" 2)
+		(setq dA_prev 	(matmul (transpose (second linear_cache)) dZ))
+		
+		(setq layer_gradients (list dA_prev dW db))
+		;(format t "~%layer_gradients is ~S~%" layer_gradients)
+		(cond ((null accumulator) 	(setq accumulator layer_gradients))
+			  (t 				 	(setq accumulator (list nil layer_gradients accumulator))))
+		
+		; sanity check for gradient shapes
+		(check-gradient-shapes dA_prev dW db linear_cache)
+			
+		(cond ((> index 1) (activation-backward dA_prev caches (- index 1) accumulator))
+			  ; return
+			  ((= index 1) accumulator))))
+
+(defun check-gradient-shapes (dA_prev dW db linear_cache)
+	(assert (eql (columncount dA_prev) (columncount (first linear_cache)))
+		(dA_prev (first linear_cache))
+		"dA_prev and A_prev column counts don't match")
+	(assert (eql (rowcount dA_prev) (rowcount (first linear_cache)))
+		(dA_prev (first linear_cache))
+		"dA_prev and A_prev row counts don't match")
+	(assert (eql (columncount dW) (columncount (second linear_cache)))
+		(dW (second linear_cache))
+		"dW and W column counts don't match")
+	(assert (eql (rowcount dW) (rowcount (second linear_cache)))
+		(dW (second linear_cache))
+		"dW and W row counts don't match")
+	(assert (eql (columncount db) (columncount (third linear_cache)))
+		(db (third linear_cache))
+		"db and b column counts don't match")
+	(assert (eql (rowcount db) (rowcount (third linear_cache)))
+		(db (third linear_cache))
+		"db and b row counts don't match"))
+
+(defun update-parameters (parameters new_parameters gradients learning-rate)
+	;(print 'update-parameters)
+	(loop for l from 1 to (- (model-layer-count) 1)
+			do 
+				;(format t "~%b: ~S~%" (gethash (list 'w l) parameters))
+				;(format t "~%gradients: ~S~%" (nth l (third gradients)))
+				(setf (gethash (list 'w l) new_parameters) (element-wise-minus (gethash (list 'w l) parameters) (mat-multiply (nth l (second gradients)) learning-rate))) ; weights
+				(setf (gethash (list 'b l) new_parameters) (element-wise-minus (gethash (list 'b l) parameters) (mat-multiply (nth l (third gradients)) learning-rate))) ; biases
+				;(format t "~%to: ~S~%" (gethash (list 'w l) new_parameters))
+				)
+	new_parameters)
+		
 (defun is-sigmoid (activation-function)
 	(string-equal activation-function 'SIGMOID))
 	
@@ -119,31 +241,59 @@
 (defun get-activation (activation-values)
 	(first activation-values))
 	
-(defun get-cache (activation-values)
+(defun get-activation-cache (activation-values)
 	(second activation-values))
 
+(defun print-accuracy (activations Y index)
+	(unless (>= index (array-total-size activations))
+		(format t "~%activation/label: ~S / ~S~%" (row-major-aref activations index) (row-major-aref Y index))
+		(print-accuracy activations Y (+ index 1))))
+	
 (defun model (X Y learning_rate num_iterations)
-	(let ((*parameters2* (make-hash-table :test 'equal))) ; weights and biases
-		(format t "~%Dimensions are ~S~%" (model-dimensions))
-		; initialize parameters
-		(initialize-parameters (model-dimensions) *parameters2* 1)
-		(loop for key being the hash-keys of *parameters2*
-           using (hash-value value)
-           do (format t "The value associated with the key ~S is ~S~%" key value))
-		; loop for iterations
-		(loop for l from 0 to (- num_iterations 1)
-			do 
-				(let ((forward-values nil)
-					  (cost nil)
-					  (gradients nil)
-					  (new_parameters nil))
-					(setq forward-values (forward-propagation X *parameters2* 1 nil nil))
-					(format t "~%A_L is ~S~%" (get-activation forward-values))
-					(format t "cache is ~S~%" (get-cache forward-values))
-					(setq cost (compute-cost (get-activation forward-values) Y))
-					(format t "~%cost: ~S~%" cost)
+	(let (
+		(*parameters* (make-hash-table :test 'equal)) ; weights and biases
+		(new_parameters (make-hash-table :test 'equal)))
+		(format t "~%parameters count ~S~%" (hash-table-size *parameters*))
+			(format t "~%Dimensions are ~S~%" (model-dimensions))
+			; initialize parameters
+			(initialize-parameters (model-dimensions) *parameters* 1)
+			; (loop for key being the hash-keys of *parameters*
+			   ; using (hash-value value)
+			   ; do (format t "The value associated with the key ~S is ~S~%" key value))
+			   
+			; loop for iterations
+			(loop for l from 0 to (- num_iterations 1)
+				do 
+					(let ((forward-values nil)
+						  (cost nil)
+						  (gradients nil))
+						;(format t "~%iteration: ~S~%" l)
+						
+						; (loop for key being the hash-keys of *parameters*
+						   ; using (hash-value value)
+						   ; do (format t "params: The value associated with the key ~S is ~S~%" key value))
+						;(print 'forward)
+						
+						;(format t "~%X: ~S~%" X)
+						(setq forward-values (forward-propagation X *parameters* 1 nil nil))
 					
-					;(setq gradients (backward-propagation (get-activation forward-values) Y (get-cache forward-values)))
-					;(setq new_parameters (update-parameters *parameters2* gradients learning_rate))
+						;(print-accuracy (get-activation forward-values) Y 0)
+					
+						;(format t "~%forward-activations: ~s~%" (get-activation forward-values))
+						;(print 'cost)
+						(setq cost (compute-cost (get-activation forward-values) Y))
+						(format t "~%cost: ~S~%" cost)
+						;(format t "~%b from cache: ~S~%" (get-activation-cache forward-values))
+						
+						;(print 'backward)
+						(setq gradients (backward-propagation (get-activation forward-values) Y (get-activation-cache forward-values)))
+						;(format t "~%gradients: ~S~%" gradients)
+						;(print 'params)
+						(setq new_parameters (update-parameters *parameters* new_parameters gradients learning_rate))
+						(setq *parameters* new_parameters)
+						;(print 'endofloop)
+						; (loop for key being the hash-keys of new_parameters
+						   ; using (hash-value value)
+						   ; do (format t "new_parameters: The value associated with the key ~S is ~S~%" key value))
 					))
-	*parameters2*))
+	new_parameters))

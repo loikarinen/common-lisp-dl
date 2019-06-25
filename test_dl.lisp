@@ -1,4 +1,7 @@
 (load (merge-pathnames "dl.lisp" *load-truename*))
+(load (merge-pathnames "model.lisp" *load-truename*))
+(load "~/quicklisp/setup.lisp")
+(ql:quickload "split-sequence")
 (defun round-to (number precision &optional (what #'round))
     (let ((div (expt 10 precision)))
          (/ (funcall what (* number div)) div)))
@@ -50,16 +53,55 @@
 			(if (not (equalp 2.888 (third (first y4))))
 				(print "FAIL: y4 ReLU calculation failed")))))
 
-(defun test-model ()
-	(let ((Y (make-matrix 3 1)))
-		(setf (aref Y 0 0) 1)
-		(setf (aref Y 1 0) 1)
-		(setf (aref Y 2 0) 0)
-		(let ((*parameters* (model (make-matrix 3 3) Y nil 1)))
-			(loop for key being the hash-keys of *parameters*
-			   using (hash-value value)
-			   do (format t "The value associated with the key ~S is ~S~%" key value)))))
+(defun test-model (input-x-and-y)
+	(let ((Y (make-matrix (length (second input-x-and-y)) 1))
+		  (X (transpose (make-array (list (length (first input-x-and-y)) (length (first (first input-x-and-y)))) :initial-contents (first input-x-and-y)))))
+			  (loop for i from 0 to (- (length (second input-x-and-y)) 1)
+			do (setf (aref Y i 0) (nth i (second input-x-and-y))))
 
+		(setq X (mat-divide X 255))
+		
+		(let ((final_parameters (model 
+			X Y 0.01 50)))
+			 ; (loop for key being the hash-keys of final_parameters
+			    ; using (hash-value value)
+			    ; do (format t "final_parameters: The value associated with the key ~S is ~S~%" key value))
+		; (format t "~%layer-count: ~S~%" (model-layer-count))
+		; (format t "~%predictions: ~S~%" (linear-activation-forward X 
+			; (gethash (list 'w (model-layer-count)) final_parameters) 
+			; (gethash (list 'b (model-layer-count)) final_parameters) 
+			; final_parameters 
+			; (layer-function (model-layer-count))))
+			
+	)))
+
+(defun read-data (path)
+	(let ((in (open path))
+		  (x-and-y nil))
+			(setq x-and-y (read-and-parse-line in))
+			(close in)
+	x-and-y))
+
+(defun read-and-parse-line (stream)
+	(let ((x (list nil))
+		  (y (list nil)))
+			(when stream
+				(loop for line = (read-line stream nil)
+					 while line do 
+						(let ((parsed (parse-list (split-sequence:SPLIT-SEQUENCE #\, line))))
+							(setq y (append y (list (first parsed)))) ; predictions at index 0
+							(setq x (append x (list (rest parsed))))  ; input data 
+						)))
+			(setq y (mapcar (lambda (x) 
+						(cond
+							((null x) nil)
+							((= x 1) 1)
+							(t 0))) y))
+	(list (rest x) (rest y))))
+
+(defun parse-list (line)
+	(mapcar #'parse-integer line))
+	
 (print '(Test sigmoid))
 ;(time (test-sigmoid))
 
@@ -67,4 +109,7 @@
 ;(time (test-relu))
 
 (print '(Test model))
-(time (test-model))
+(time (test-model (read-data "mnist_train.csv")))
+
+(print '(Test read data))
+;(time (read-data "mnist_train.csv"))

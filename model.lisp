@@ -1,5 +1,5 @@
 (defparameter *model*
-	'((0 => 3 nil)
+	'((0 => 784 nil)
 	  (1 => 5 "relu")
 	  (2 => 1 "sigmoid")
 	  (-1 "cost-function" => "cross-entropy")
@@ -20,7 +20,7 @@
 	(nth 3 (assoc -1 *model*)))
 
 (defun model-optimization-algorithm ()
-	"The model's cost function." 
+	"The model's optimization algorithm." 
 	(nth 3 (assoc -2 *model*)))
 	
 (defun model-layer-count ()
