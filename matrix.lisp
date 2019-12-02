@@ -25,9 +25,6 @@
 
 (defun dot (a b)
   "Matrix a and list b multiplication"
-  (print 'dot)
-  (print a)
-  (print b)
   (assert (eql (columncount a) (length b))
             (a b) 
             "Cannot multiply matrices, dimensions don't match")
@@ -84,11 +81,6 @@
 	
 (defun matmul (a b)
   "Matrix multiplication"
-  ;(print 'matmul)
-  ; (format t "~%A rowcount ~S~%" (rowcount a))
-  ; (format t "~%A columncount ~S~%" (columncount a))
-  ; (format t "~%W rowcount ~S~%" (rowcount b))
-  ; (format t "~%W columncount ~S~%" (columncount b))
   (assert (eql (columncount a) (rowcount b))
             (a b) 
             "Cannot multiply matrices, dimensions don't match")
@@ -130,13 +122,6 @@
 	
 (defun matrix-apply (matrix b function)
 	"Apply function for scalar or list of scalars to matrix"
-  ; (format t "~%matrix-apply A rowcount ~S~%" (rowcount matrix))
-  ; (format t "~%A columncount ~S~%" (columncount matrix))
-  ; (format t "~%b ~S~%" b)
-	; (assert (or (not (listp b)) (eql (length b) (rowcount matrix)))
-            ; (matrix b) 
-            ; "Cannot mat-apply, dimensions don't match")
-	
 	(cond 
 		((and (listp b) (not (eql (length b) (rowcount matrix))))
 			'dimensions-no-match)

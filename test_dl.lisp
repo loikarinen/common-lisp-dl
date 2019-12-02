@@ -103,13 +103,13 @@
 	(mapcar #'parse-integer line))
 	
 (print '(Test sigmoid))
-;(time (test-sigmoid))
+(time (test-sigmoid))
 
 (print '(Test ReLU))
-;(time (test-relu))
+(time (test-relu))
 
 (print '(Test model))
 (time (test-model (read-data "mnist_train.csv")))
 
 (print '(Test read data))
-;(time (read-data "mnist_train.csv"))
+(time (read-data "mnist_train.csv"))
